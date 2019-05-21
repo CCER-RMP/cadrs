@@ -5,7 +5,7 @@ import pandas as pd
 
 BASE_DIR = '/home/joseh/data/'
 GLOVE_DIR = os.path.join(BASE_DIR, 'glove.6B')
-TEXT_DATA_DIR = os.path.join(BASE_DIR, 'courses_ospi_b.csv')
+TEXT_DATA_DIR = os.path.join(BASE_DIR, 'courses_ccer_ospi_b.csv')
 
 crs_names =  pd.read_csv(TEXT_DATA_DIR, delimiter = ',')
 print('The shape: %d x %d' % crs_names.shape)
@@ -233,6 +233,6 @@ test = pd.concat([pred_out, my_texts_str], axis=1)
 test.head
 #pred_out.to_csv('/home/joseh/data/cnn_result_b.csv', encoding='utf-8', index=False)
 
-test.to_csv('/home/joseh/data/cnn_result_names4.csv', encoding='utf-8', index=False)
+test.to_csv('/home/joseh/data/cnn_result_names_5.csv', encoding='utf-8', index=False)
 
 labels_index
