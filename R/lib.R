@@ -1,8 +1,11 @@
 
-library(RSQLite)
-library(readr)
-library(sys)
+library(data.table)
 library(here)
+library(openxlsx)
+library(readr)
+library(RSQLite)
+library(sys)
+library(tidyverse)
 
 source(here("settings.R"))
 
@@ -64,7 +67,6 @@ import_table_using_dbi <- function(file_path, table_name, sep=",", quote="\"", f
 	# 	,fileEncoding=file_encoding
 	# )
 	df <- read_delim(file_path, delim=sep, col_types=cols(.default = "c"), quote=quote)
-	print("after read.csv")
 	print(nrow(df))
 	conn <- dbConnect(SQLite(), sqlite_database_path)
 	dbExecute(
@@ -80,23 +82,10 @@ import_table_using_dbi <- function(file_path, table_name, sep=",", quote="\"", f
 	gc() # force garbage collection
 }
 
-import_table_using_dbi(dim_course_path, "DimCourse")
-import_table_using_dbi(dim_school_path, "dimSchool", sep="|", quote="", file_encoding="UTF-8-BOM")
-import_table_using_dbi(enrollment_path, "enrollment", sep="|", quote="", file_encoding="UTF-8-BOM")
-import_table_using_dbi(gr_hist, "courses", sep="|", quote="", file_encoding="UTF-8-BOM")
-
-######
-
-fileConn <- file("SQL/create_course_2017_cohort.sql", "r")
-lines <- readLines(fileConn)
-close(fileConn)
-
-exec_sqlite(lines)
-
-######
-
-fileConn <- file("SQL/create_enroll_2017_cohort.sql", "r")
-lines <- readLines(fileConn)
-close(fileConn)
-
-exec_sqlite(lines)
+import_table_from_dataframe <- function(df, table_name) {
+	print(paste("loading", table_name, sep=" "))
+	conn <- dbConnect(SQLite(), sqlite_database_path)
+	dbExecute(conn,paste("DROP TABLE IF EXISTS", table_name, sep=" "))
+	dbWriteTable(conn, table_name, df, fileEncoding = 'UTF-8')
+	dbDisconnect(conn)
+}
