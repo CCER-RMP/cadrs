@@ -1,35 +1,27 @@
+#!/usr/bin/env python
 import csv
-import json
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
+import os
+import re
+from pathlib import Path
 
 from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer, TfidfTransformer
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import LinearSVC
+from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import classification_report
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, cross_val_predict
 
-from gensim.models.word2vec import Word2Vec
-
-import os
-import os.path
-import re
-import random
-import operator
-import sys
-import nltk 
-#nltk.download('stopwords')
-from nltk import pos_tag
-from nltk.corpus import stopwords
-from collections import Counter
-from bs4 import BeautifulSoup
-
-from xgboost import XGBClassifier
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import plot_confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.model_selection import GridSearchCV
 
 # fix for bug in venv on windows, probably starting from python 3.7.2: https://bugs.python.org/issue35797
 # this manifests as "PermissionError: [WinError 5] Access is denied" errors.
@@ -41,55 +33,42 @@ if sys.platform == 'win32' and in_virtual_env and sys.version_info.major == 3 an
 
 this_file_path = os.path.abspath(__file__)
 project_root = os.path.split(os.path.split(os.path.split(this_file_path)[0])[0])[0]
+
+sys.path.append(project_root)
+import text_preprocess as tp
+
 path_root = os.path.join(project_root, "data") + '/'
+path_to_metadata = os.path.join(project_root, "metadata") + '/'
 path_to_cadrs = path_root + 'cadrs/'
-path_to_pretrained_wv = path_root
-path_to_plot = path_root
-path_to_save = path_root
+path_to_db = project_root + '/output/'
 
+# need to test the following (edge cases)
+updated_cadrs = sorted(list(filter(lambda x: '.csv' in x, os.listdir(path_to_cadrs))))[-1]
 
-crs_cat =  pd.read_csv(os.path.join(path_to_cadrs,'cadrs_training_rsd.csv'), delimiter = ',')
-print('The shape: %d x %d' % crs_cat.shape)
-crs_cat.columns
+crs_cat =  pd.read_csv(os.path.join(path_to_cadrs,updated_cadrs), delimiter = ',')
+crs_abb = tp.get_metadata_dict(os.path.join(path_to_metadata, 'course_abb.json'))
 
-crs_cat.shape
-crs_cat.head
-
-
-# Create lists of texts and labels 
+# look at class balance
+crs_cat["cadr"].value_counts()
+# handle json
+# use the subject class as a "classifier"
 text =  crs_cat['Name']
-len(text)
-
 labels = crs_cat['cadr']
 
 num_words = [len(words.split()) for words in text]
 max(num_words)
 
-# Clean up text
-REPLACE_BY_SPACE_RE = re.compile('[/(){}\[\]\|@,;]')
-BAD_SYMBOLS_RE = re.compile('[^0-9a-z #+_]')
-# STOPWORDS = set(stopwords.words('english'))
-REM_GRADE = re.compile(r'\b[0-9]\w+')
-REPLACE_NUM_RMN = re.compile(r'([0-9]+)|(^IX|IV|V?I{0,3}$)')
-# re.sub(r'\b[0-9]\w+|([0-9]+)|([IVXLCDM]+)', '', test_2)
-#test = 'English Language Arts IV 10th grade Vietnam'
-#re.sub(r'(^IX|IV|V?I{0,3}$)', '', test)
+text = text.apply(tp.clean_text)
+text = tp.update_abb(text, json_abb=crs_abb)
 
-def clean_text(text):
-    # text = REM_GRADE.sub('', text)
-    # text = REPLACE_NUM_RMN.sub('', text)
-    text = text.lower() # lowercase text
-    text = REPLACE_BY_SPACE_RE.sub(' ', text)
-    text = BAD_SYMBOLS_RE.sub(' ', text) 
-    # text = ' '.join(word for word in text.split() if word not in STOPWORDS)
-    text = ' '.join(word for word in text.split() if len(word)>1)
-    return text
+# we might want to get rid of duplication after standardization
+dedup_fl = pd.concat([text,labels], axis = 1).drop_duplicates()
+dedup_fl['cadr'].value_counts()
 
-text = text.apply(clean_text)
+text = dedup_fl['Name']
+labels = dedup_fl['cadr']
 
-text.apply(lambda x: len(x.split(' '))).sum()
-text[1:50]
-#####
+# begin algorithm prep
 x_train, x_test, y_train, y_test = train_test_split(text, labels, test_size=0.2, random_state = 42)
 
 
@@ -116,7 +95,7 @@ parameters = {
 }
 
 gs_clf = GridSearchCV(sgd, parameters, cv=5, iid=False, n_jobs=-1)
-gs_clf.fit(text, labels)
+gs_clf.fit(x_train, y_train)
 
 gs_clf.best_score_
 for param_name in sorted(parameters.keys()):
@@ -124,13 +103,24 @@ for param_name in sorted(parameters.keys()):
 
 gs_clf.cv_results_
 # check the test set for results 
+### with hyper parameters
+
+# clf__alpha: 0.001
+# tfidf__use_idf: True
+# vect__analyzer: 'word'
+# vect__ngram_range: (1, 2)
 
 test_pred = gs_clf.predict(x_test)
+print('accuracy %s' % accuracy_score(test_pred, y_test))
+print(classification_report(y_test, test_pred))
+print(confusion_matrix(y_test, test_pred))
+
 
 pred_cols = pd.DataFrame(test_pred, columns = ['p_CADRS'])
-
+  
 
 pred_cols.head
+
 
 combined_pred = pred_cols.merge(x_test, left_index=True, right_index=True)
 combined_pred = combined_pred.merge(y_test, left_index=True, right_index=True)
@@ -153,6 +143,7 @@ num_words_2 = [len(words.split()) for words in text_out]
 max(num_words_2)
 
 text = text_out.apply(clean_text)
+text = text.replace(to_replace = d, regex=True)
 
 text.apply(lambda x: len(x.split(' '))).sum()
 

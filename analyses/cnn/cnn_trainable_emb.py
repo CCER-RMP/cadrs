@@ -36,8 +36,6 @@ path_to_plot = path_root
 path_to_save = path_root
 
 use_pretrained = True
-name_save = 'cadrs_cnn_titles_cadrs.hdf5'
-
 validation_split = 0.2
 
 crs_cat =  pd.read_csv(os.path.join(path_to_cadrs,'cadrs_training_rsd.csv'), delimiter = ',')
@@ -98,7 +96,7 @@ text_tok = pad_sequences(sequences, maxlen=max_seq_len+1)
 text_tok.shape
 np.mean(text_tok > 0)
 
-from keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical
 
 labels = to_categorical(np.asarray(labels))
 
@@ -194,4 +192,3 @@ output_string = s.format(
             grid_result_cv.best_params_)
 
 print(output_string)
-
